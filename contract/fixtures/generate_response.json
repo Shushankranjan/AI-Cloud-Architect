@@ -1,0 +1,191 @@
+{
+  "session_id": "sess_demo_001",
+  "version": 1,
+  "constraints": {
+    "traffic_profile": "medium",
+    "data_type": "relational",
+    "latency_sensitivity": "standard",
+    "compliance": ["gdpr"],
+    "budget_tier": "standard",
+    "region": "eu-central-1",
+    "extracted_facts": [
+      "Project management SaaS targeting small teams",
+      "~5,000 users expected in the first year, EU-based",
+      "GDPR compliance is mandatory",
+      "Monthly budget under $500",
+      "Real-time notifications planned for a later phase"
+    ],
+    "ambiguities": [
+      "Assumed relational data model (projects, tasks, users) — confirm if document-style storage is acceptable",
+      "Assumed standard latency tolerance; no real-time requirement in v1",
+      "Assumed single-region EU deployment is sufficient (no US users)"
+    ]
+  },
+  "options": [
+    {
+      "id": "opt-serverless",
+      "name": "Serverless-First",
+      "paradigm": "serverless",
+      "summary": "Fully managed, pay-per-request stack. Zero servers to patch, scales automatically, cheapest at low traffic.",
+      "services": [
+        { "name": "Amazon CloudFront", "role": "CDN for frontend assets and API edge caching", "category": "cdn" },
+        { "name": "Amazon Cognito", "role": "User authentication and authorization", "category": "auth" },
+        { "name": "Amazon API Gateway", "role": "REST API entry point, rate limiting, request validation", "category": "integration" },
+        { "name": "AWS Lambda", "role": "Stateless business logic, scales to zero", "category": "compute" },
+        { "name": "Amazon DynamoDB", "role": "NoSQL datastore with on-demand capacity", "category": "database" },
+        { "name": "Amazon S3", "role": "File attachments and frontend hosting", "category": "storage" },
+        { "name": "Amazon EventBridge", "role": "Event bus for future async workflows (notifications)", "category": "integration" }
+      ],
+      "rationale": "At 5,000 users the request volume is low enough that pay-per-request pricing keeps the bill minimal. No infrastructure to operate means a solo founder can ship and sleep.",
+      "tradeoffs": {
+        "pros": [
+          "Lowest cost at this traffic level",
+          "Zero server management",
+          "Automatic scaling with no capacity planning",
+          "Fastest path to production"
+        ],
+        "cons": [
+          "DynamoDB data model requires upfront design discipline; joins are painful",
+          "Cold starts add 100-500ms latency spikes",
+          "Vendor lock-in is deepest with this option",
+          "Debugging distributed Lambda flows is harder"
+        ],
+        "best_when": "You want minimal ops burden, your data model is access-pattern-driven, and you value speed over flexibility."
+      },
+      "estimated_monthly_cost_usd": {
+        "total_low": 60,
+        "total_high": 180,
+        "breakdown": [
+          { "category": "compute", "low": 10, "high": 40, "notes": "Lambda invocations + GB-seconds" },
+          { "category": "database", "low": 25, "high": 80, "notes": "DynamoDB on-demand read/write units" },
+          { "category": "networking", "low": 15, "high": 35, "notes": "API Gateway calls + data transfer" },
+          { "category": "storage", "low": 5, "high": 15, "notes": "S3 storage + requests" },
+          { "category": "auth", "low": 0, "high": 5, "notes": "Cognito free tier covers 50k MAU" }
+        ],
+        "assumptions": [
+          "5,000 users with ~50 requests/day average",
+          "DynamoDB on-demand mode, no provisioned capacity",
+          "Under 100GB S3 storage"
+        ]
+      },
+      "operational_complexity": "low",
+      "scalability_ceiling": "Effectively unlimited; DynamoDB and Lambda scale horizontally by design",
+      "security_posture": "Strong managed defaults; IAM-scoped Lambda roles, no exposed servers",
+      "time_to_deploy": "1-2 weeks"
+    },
+    {
+      "id": "opt-container",
+      "name": "Container on Fargate",
+      "paradigm": "container",
+      "summary": "Dockerized app on ECS Fargate with managed PostgreSQL. Classic SaaS shape with no servers to patch.",
+      "services": [
+        { "name": "Amazon CloudFront", "role": "CDN in front of the app and API", "category": "cdn" },
+        { "name": "AWS WAF", "role": "Web application firewall on CloudFront", "category": "security" },
+        { "name": "Amazon Cognito", "role": "User authentication", "category": "auth" },
+        { "name": "Application Load Balancer", "role": "Routes traffic to containers, TLS termination", "category": "networking" },
+        { "name": "Amazon ECS Fargate", "role": "Runs API and web containers without managing EC2", "category": "compute" },
+        { "name": "Amazon RDS PostgreSQL", "role": "Primary relational database, Multi-AZ", "category": "database" },
+        { "name": "Amazon ElastiCache Redis", "role": "Session cache and hot-path reads", "category": "database" },
+        { "name": "Amazon S3", "role": "User file uploads", "category": "storage" }
+      ],
+      "rationale": "A relational project/task/user model maps naturally to PostgreSQL. Fargate removes server management while keeping a familiar request/response architecture that any developer can debug.",
+      "tradeoffs": {
+        "pros": [
+          "PostgreSQL fits relational SaaS data perfectly",
+          "Familiar stack — easy to hire for",
+          "No cold starts; consistent latency",
+          "Containers are portable if you ever leave AWS"
+        ],
+        "cons": [
+          "Higher baseline cost than serverless at low traffic",
+          "You still manage container orchestration config",
+          "Scaling requires autoscaling policies, not magic"
+        ],
+        "best_when": "Your data is relational, you want predictable latency, and you plan to grow the team."
+      },
+      "estimated_monthly_cost_usd": {
+        "total_low": 260,
+        "total_high": 480,
+        "breakdown": [
+          { "category": "compute", "low": 110, "high": 190, "notes": "2 Fargate tasks, 0.5 vCPU / 1GB, 24/7" },
+          { "category": "database", "low": 95, "high": 160, "notes": "RDS db.t4g.medium Multi-AZ" },
+          { "category": "cache", "low": 25, "high": 55, "notes": "ElastiCache cache.t4g.micro" },
+          { "category": "networking", "low": 20, "high": 50, "notes": "ALB hours + data transfer" },
+          { "category": "storage", "low": 5, "high": 15, "notes": "S3 uploads" },
+          { "category": "security", "low": 5, "high": 10, "notes": "WAF web ACL + rules" }
+        ],
+        "assumptions": [
+          "2 always-on Fargate tasks for availability",
+          "RDS Multi-AZ for durability (GDPR-grade)",
+          "Under 500GB/month data transfer"
+        ]
+      },
+      "operational_complexity": "medium",
+      "scalability_ceiling": "~50,000 concurrent users before database sharding is needed",
+      "security_posture": "Strong; private subnets, WAF, encryption at rest via KMS, IAM-scoped tasks",
+      "time_to_deploy": "2-3 weeks"
+    },
+    {
+      "id": "opt-traditional",
+      "name": "Classic EC2 + RDS",
+      "paradigm": "traditional",
+      "summary": "EC2 instances in an Auto Scaling Group behind an ALB with RDS PostgreSQL. Maximum control, most ops work.",
+      "services": [
+        { "name": "Amazon Route 53", "role": "DNS and health-checked routing", "category": "networking" },
+        { "name": "Application Load Balancer", "role": "TLS termination and routing", "category": "networking" },
+        { "name": "Amazon EC2 + Auto Scaling Group", "role": "Web/API servers, scale on CPU", "category": "compute" },
+        { "name": "Amazon RDS PostgreSQL", "role": "Primary relational database", "category": "database" },
+        { "name": "Amazon ElastiCache Redis", "role": "Caching layer", "category": "database" },
+        { "name": "Amazon S3", "role": "Static assets and uploads", "category": "storage" }
+      ],
+      "rationale": "The most battle-tested shape on AWS. Every knob is adjustable, every problem is documented online. Chosen when you need full control of the OS layer.",
+      "tradeoffs": {
+        "pros": [
+          "Full control over OS, runtime, and networking",
+          "Cheapest compute at sustained high utilization (with savings plans)",
+          "Largest body of community knowledge"
+        ],
+        "cons": [
+          "You patch OS, manage AMIs, and handle SSH access",
+          "Slowest to scale (minutes, not seconds)",
+          "Highest operational burden for a solo developer",
+          "Overkill for 5,000 users"
+        ],
+        "best_when": "You have specific OS-level requirements or sustained heavy compute that makes reserved capacity cheaper."
+      },
+      "estimated_monthly_cost_usd": {
+        "total_low": 300,
+        "total_high": 560,
+        "breakdown": [
+          { "category": "compute", "low": 130, "high": 240, "notes": "2x t3.medium + ASG headroom" },
+          { "category": "database", "low": 95, "high": 160, "notes": "RDS db.t4g.medium Multi-AZ" },
+          { "category": "cache", "low": 25, "high": 55, "notes": "ElastiCache cache.t4g.micro" },
+          { "category": "networking", "low": 25, "high": 60, "notes": "ALB + Route 53 + transfer" },
+          { "category": "storage", "low": 10, "high": 25, "notes": "EBS volumes + S3" }
+        ],
+        "assumptions": [
+          "2 t3.medium instances minimum, on-demand pricing",
+          "No savings plans applied"
+        ]
+      },
+      "operational_complexity": "high",
+      "scalability_ceiling": "Similar to container option; bounded by database, not compute",
+      "security_posture": "Good if hardened manually; security groups, IAM roles, and patching are your responsibility",
+      "time_to_deploy": "3-4 weeks"
+    }
+  ],
+  "recommendation": {
+    "selected_option_id": "opt-container",
+    "rationale": "Your data model (projects, tasks, users, permissions) is relational, which makes PostgreSQL the natural fit — and that rules out the serverless option's DynamoDB-centric design for a team without NoSQL modeling experience. Between containers and EC2, Fargate removes the entire OS-patching burden, which matters enormously for a solo developer or tiny team. The ~$180/month premium over serverless buys you predictable latency, a portable architecture, and a stack any future hire already knows. At 5,000 users you're comfortably inside the budget ceiling, and GDPR is satisfied by pinning everything to eu-central-1 with KMS encryption.",
+    "why_not_others": [
+      {
+        "option_id": "opt-serverless",
+        "reason": "Cheapest, but DynamoDB would force you to re-model relational project/task data around access patterns — a common source of painful rewrites at month 6. Cold starts also hurt perceived quality for a productivity tool."
+      },
+      {
+        "option_id": "opt-traditional",
+        "reason": "Maximum control you don't need at 5,000 users, in exchange for OS patching and AMI management that will eat a solo founder's weekends. Slower scaling is a liability if you go viral."
+      }
+    ]
+  }
+}

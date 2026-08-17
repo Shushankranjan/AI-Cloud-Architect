@@ -1,0 +1,35 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      ARCHITECT_MODE: ${ARCHITECT_MODE:-stub}
+      ARCHITECT_LLM_PROVIDER: ${ARCHITECT_LLM_PROVIDER:-gemini}
+      ARCHITECT_LARGE_MODEL: ${ARCHITECT_LARGE_MODEL:-gemini-flash-latest}
+      ARCHITECT_LLM_TIMEOUT: ${ARCHITECT_LLM_TIMEOUT:-120}
+      ARCHITECT_LLM_MAX_RETRIES: ${ARCHITECT_LLM_MAX_RETRIES:-2}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    command: sh -c "npm install && npm run dev"
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    depends_on:
+      - backend

@@ -1,0 +1,81 @@
+{
+  "session_id": "sess_demo_001",
+  "selected_option_id": "opt-container",
+  "diagram": {
+    "title": "Container on Fargate — Recommended Architecture",
+    "mermaid_source": "flowchart TB\n    User((\"Users\"))\n\n    subgraph Edge[\"Edge Layer\"]\n        WAF[\"AWS WAF\"]\n        CF[\"CloudFront CDN\"]\n    end\n\n    COG[\"Amazon Cognito\"]\n\n    subgraph VPC[\"VPC — eu-central-1\"]\n        subgraph Public[\"Public Subnets\"]\n            ALB[\"Application Load Balancer\"]\n        end\n        subgraph Private[\"Private Subnets\"]\n            ECS[\"ECS Fargate<br/>API + Web Containers\"]\n            RDS[(\"RDS PostgreSQL<br/>Multi-AZ\")]\n            REDIS[(\"ElastiCache Redis\")]\n        end\n    end\n\n    S3[(\"S3<br/>User Uploads\")]\n\n    User --> WAF --> CF\n    CF --> ALB\n    CF -.->|\"static assets\"| S3\n    User -->|\"auth\"| COG\n    ALB --> ECS\n    ECS --> RDS\n    ECS --> REDIS\n    ECS --> S3\n    COG -.->|\"token validation\"| ECS"
+  },
+  "analysis": {
+    "cost": {
+      "monthly_estimate_usd": {
+        "total_low": 260,
+        "total_high": 480,
+        "breakdown": [
+          { "category": "compute", "low": 110, "high": 190, "notes": "2 Fargate tasks, 0.5 vCPU / 1GB, 24/7" },
+          { "category": "database", "low": 95, "high": 160, "notes": "RDS db.t4g.medium Multi-AZ" },
+          { "category": "cache", "low": 25, "high": 55, "notes": "ElastiCache cache.t4g.micro" },
+          { "category": "networking", "low": 20, "high": 50, "notes": "ALB hours + data transfer" },
+          { "category": "storage", "low": 5, "high": 15, "notes": "S3 uploads" },
+          { "category": "security", "low": 5, "high": 10, "notes": "WAF web ACL + rules" }
+        ],
+        "assumptions": [
+          "2 always-on Fargate tasks for availability",
+          "RDS Multi-AZ for durability",
+          "Under 500GB/month data transfer",
+          "Prices for eu-central-1, on-demand"
+        ]
+      },
+      "notes": [
+        "Cost stays under your $500/month ceiling at expected traffic",
+        "Biggest lever if you need to cut: drop RDS to single-AZ (~$50 saved) at the cost of failover speed",
+        "At 5x traffic expect roughly $600-900/month — mostly compute and data transfer"
+      ]
+    },
+    "security": {
+      "posture": "Strong baseline. All compute and data live in private subnets; only the ALB and CloudFront are internet-facing. Encryption enforced at rest (KMS) and in transit (TLS 1.2+).",
+      "risks": [
+        {
+          "severity": "high",
+          "description": "GDPR data residency: any service accidentally deployed outside eu-central-1 would violate residency requirements",
+          "mitigation": "Use AWS Organizations SCPs to deny non-eu-central-1 regions; pin all IaC to the region"
+        },
+        {
+          "severity": "medium",
+          "description": "S3 bucket with user uploads could be exposed by misconfiguration",
+          "mitigation": "Enable S3 Block Public Access at the account level; serve uploads via pre-signed URLs only"
+        },
+        {
+          "severity": "medium",
+          "description": "No web-layer attack filtering by default",
+          "mitigation": "AWS WAF managed rule sets on CloudFront (already in the design) — keep rules updated"
+        },
+        {
+          "severity": "low",
+          "description": "No audit trail of API/API-console actions",
+          "mitigation": "Enable CloudTrail in eu-central-1 with log file validation"
+        }
+      ],
+      "compliance_notes": [
+        "GDPR: data residency satisfied by eu-central-1 pinning",
+        "GDPR: right-to-erasure needs an application-level delete pipeline (cascading deletes + S3 lifecycle)",
+        "GDPR: sign the AWS Data Processing Addendum (DPA)",
+        "Encryption at rest via KMS on RDS, S3, and ElastiCache; TLS everywhere via ACM"
+      ]
+    },
+    "scalability": {
+      "bottlenecks": [
+        "Single RDS primary writer — the first ceiling you'll hit (~5,000 writes/sec)",
+        "Fargate task count limited by account quotas (raise via support ticket)",
+        "ElastiCache single-node micro instance will need upgrading before 10k concurrent users"
+      ],
+      "strategy": "Scale stateless containers horizontally first; scale the database with read replicas before considering sharding.",
+      "mechanisms": [
+        "ECS service autoscaling on CPU/memory targets (target 60%)",
+        "RDS read replicas for read-heavy dashboards",
+        "ElastiCache for sessions and hot queries to offload the DB",
+        "CloudFront caching for static assets and public reads"
+      ],
+      "ceiling": "~50,000 concurrent users before the database needs sharding or a move to Aurora"
+    }
+  }
+}

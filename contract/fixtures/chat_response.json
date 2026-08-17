@@ -1,0 +1,27 @@
+{
+  "reply": "Good question — real-time notifications change the picture slightly but don't break this architecture. Since your containers are already behind an ALB, you have two clean paths:\n\n1. **Managed approach (recommended):** Add Amazon SNS + AWS Lambda fan-out to push notifications (email/push), and use ElastiCache Redis Pub/Sub for in-app live updates. Your existing Redis instance handles this with a size bump.\n\n2. **WebSocket approach:** Add an ALB-native WebSocket endpoint on the same Fargate service, using Redis Pub/Sub to fan out messages across tasks.\n\nBoth keep the relational core untouched. I'd start with option 1 — it's cheaper and you can add WebSockets later if you need presence/cursors.",
+  "proposed_changes": [
+    {
+      "id": "chg-001",
+      "action": "add_service",
+      "description": "Add Amazon SNS for notification fan-out",
+      "detail": "SNS topics for email and push notifications; Lambda subscribes to domain events from the API."
+    },
+    {
+      "id": "chg-002",
+      "action": "add_service",
+      "description": "Add AWS Lambda notification worker",
+      "detail": "Consumes SNS events and delivers via SES (email) and FCM/APNs (push). Pay-per-use, ~$1-3/month at your volume."
+    },
+    {
+      "id": "chg-003",
+      "action": "modify_config",
+      "description": "Upgrade ElastiCache to cache.t4g.small",
+      "detail": "Needed for Redis Pub/Sub headroom once live updates are enabled. Adds ~$20/month."
+    }
+  ],
+  "updated_diagram": {
+    "title": "Container on Fargate — with Notifications",
+    "mermaid_source": "flowchart TB\n    User((\"Users\"))\n\n    subgraph Edge[\"Edge Layer\"]\n        WAF[\"AWS WAF\"]\n        CF[\"CloudFront CDN\"]\n    end\n\n    COG[\"Amazon Cognito\"]\n\n    subgraph VPC[\"VPC — eu-central-1\"]\n        subgraph Public[\"Public Subnets\"]\n            ALB[\"Application Load Balancer\"]\n        end\n        subgraph Private[\"Private Subnets\"]\n            ECS[\"ECS Fargate<br/>API + Web Containers\"]\n            RDS[(\"RDS PostgreSQL<br/>Multi-AZ\")]\n            REDIS[(\"ElastiCache Redis<br/>Pub/Sub\")]\n        end\n    end\n\n    S3[(\"S3<br/>User Uploads\")]\n\n    subgraph Notify[\"Notification Pipeline\"]\n        SNS[\"Amazon SNS\"]\n        NLAM[\"Lambda Worker\"]\n        SES[\"Amazon SES<br/>Email\"]\n        PUSH[\"FCM / APNs<br/>Push\"]\n    end\n\n    User --> WAF --> CF\n    CF --> ALB\n    CF -.->|\"static assets\"| S3\n    User -->|\"auth\"| COG\n    ALB --> ECS\n    ECS --> RDS\n    ECS --> REDIS\n    ECS --> S3\n    COG -.->|\"token validation\"| ECS\n    ECS -->|\"domain events\"| SNS\n    SNS --> NLAM\n    NLAM --> SES\n    NLAM --> PUSH\n    REDIS -.->|\"live updates\"| ALB"
+  }
+}

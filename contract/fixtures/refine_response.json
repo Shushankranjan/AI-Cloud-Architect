@@ -1,0 +1,172 @@
+{
+  "session_id": "sess_demo_001",
+  "version": 2,
+  "constraints": {
+    "traffic_profile": "medium",
+    "data_type": "relational",
+    "latency_sensitivity": "real_time",
+    "compliance": ["gdpr"],
+    "budget_tier": "standard",
+    "region": "eu-central-1",
+    "extracted_facts": [
+      "Project management SaaS targeting small teams",
+      "~5,000 users expected in the first year, EU-based",
+      "GDPR compliance is mandatory",
+      "Monthly budget under $500",
+      "Real-time notifications and live collaboration now required in v1"
+    ],
+    "ambiguities": [
+      "Assumed WebSocket-based live updates rather than polling",
+      "Assumed collaboration means presence + task updates, not full document co-editing"
+    ]
+  },
+  "options": [
+    {
+      "id": "opt-serverless-rt",
+      "name": "Serverless + WebSocket",
+      "paradigm": "serverless",
+      "summary": "Lambda + API Gateway WebSocket APIs with DynamoDB. Fully managed real-time at pay-per-use pricing.",
+      "services": [
+        { "name": "Amazon CloudFront", "role": "CDN for frontend assets", "category": "cdn" },
+        { "name": "Amazon Cognito", "role": "Authentication", "category": "auth" },
+        { "name": "Amazon API Gateway (WebSocket)", "role": "Persistent WebSocket connections, managed", "category": "integration" },
+        { "name": "AWS Lambda", "role": "Connection handlers and business logic", "category": "compute" },
+        { "name": "Amazon DynamoDB", "role": "Datastore + connection registry", "category": "database" },
+        { "name": "Amazon S3", "role": "File attachments and hosting", "category": "storage" }
+      ],
+      "rationale": "API Gateway WebSocket APIs remove the hardest part of real-time (connection management) and keep the pay-per-use economics.",
+      "tradeoffs": {
+        "pros": [
+          "Managed WebSocket connections — no server state to track",
+          "Cheapest option at 5,000 users",
+          "Scales automatically"
+        ],
+        "cons": [
+          "DynamoDB modeling discipline still required",
+          "WebSocket + Lambda debugging is non-trivial",
+          "Deepest vendor lock-in"
+        ],
+        "best_when": "Real-time is a feature, not the product, and you want zero ops."
+      },
+      "estimated_monthly_cost_usd": {
+        "total_low": 90,
+        "total_high": 240,
+        "breakdown": [
+          { "category": "compute", "low": 15, "high": 55, "notes": "Lambda incl. WebSocket handlers" },
+          { "category": "database", "low": 30, "high": 90, "notes": "DynamoDB on-demand" },
+          { "category": "networking", "low": 30, "high": 70, "notes": "API Gateway minutes + messages" },
+          { "category": "storage", "low": 5, "high": 15, "notes": "S3" }
+        ],
+        "assumptions": ["5,000 users, ~30% concurrently connected during work hours"]
+      },
+      "operational_complexity": "low",
+      "scalability_ceiling": "Effectively unlimited",
+      "security_posture": "Strong managed defaults; IAM-scoped handlers",
+      "time_to_deploy": "2-3 weeks"
+    },
+    {
+      "id": "opt-container-rt",
+      "name": "Fargate + Redis Pub/Sub",
+      "paradigm": "container",
+      "summary": "The recommended container stack extended with WebSocket support on the ALB and Redis Pub/Sub for fan-out.",
+      "services": [
+        { "name": "Amazon CloudFront", "role": "CDN", "category": "cdn" },
+        { "name": "AWS WAF", "role": "Web application firewall", "category": "security" },
+        { "name": "Amazon Cognito", "role": "Authentication", "category": "auth" },
+        { "name": "Application Load Balancer", "role": "HTTP + WebSocket routing, TLS termination", "category": "networking" },
+        { "name": "Amazon ECS Fargate", "role": "API, web, and WebSocket containers", "category": "compute" },
+        { "name": "Amazon RDS PostgreSQL", "role": "Primary database, Multi-AZ", "category": "database" },
+        { "name": "Amazon ElastiCache Redis", "role": "Sessions, cache, and Pub/Sub fan-out", "category": "database" },
+        { "name": "Amazon S3", "role": "User uploads", "category": "storage" }
+      ],
+      "rationale": "ALBs natively support WebSocket, so real-time rides on the same containers you already run. Redis Pub/Sub fans messages across tasks without adding a new managed service.",
+      "tradeoffs": {
+        "pros": [
+          "One stack for HTTP and WebSocket",
+          "PostgreSQL still fits the data model",
+          "Redis Pub/Sub is battle-tested for this exact use case",
+          "Incremental: ship CRUD first, add sockets later"
+        ],
+        "cons": [
+          "WebSocket connections pin tasks — autoscaling must account for connection draining",
+          "~$30-50/month more than v1 for the Redis upgrade"
+        ],
+        "best_when": "You want real-time inside a familiar relational stack without new service categories."
+      },
+      "estimated_monthly_cost_usd": {
+        "total_low": 290,
+        "total_high": 530,
+        "breakdown": [
+          { "category": "compute", "low": 120, "high": 210, "notes": "2-3 Fargate tasks" },
+          { "category": "database", "low": 95, "high": 160, "notes": "RDS db.t4g.medium Multi-AZ" },
+          { "category": "cache", "low": 45, "high": 75, "notes": "ElastiCache cache.t4g.small" },
+          { "category": "networking", "low": 25, "high": 60, "notes": "ALB + transfer" },
+          { "category": "storage", "low": 5, "high": 15, "notes": "S3" }
+        ],
+        "assumptions": ["1,500 concurrent WebSocket connections at peak"]
+      },
+      "operational_complexity": "medium",
+      "scalability_ceiling": "~30,000 concurrent connections before needing a dedicated broker (e.g., managed MQTT or ElastiCache cluster mode)",
+      "security_posture": "Strong; private subnets, WAF, KMS encryption, TLS on sockets",
+      "time_to_deploy": "3-4 weeks"
+    },
+    {
+      "id": "opt-managed-rt",
+      "name": "Managed Real-Time (AppSync)",
+      "paradigm": "hybrid",
+      "summary": "Fargate core for CRUD plus AWS AppSync subscriptions for real-time — real-time as a managed service.",
+      "services": [
+        { "name": "Amazon CloudFront", "role": "CDN", "category": "cdn" },
+        { "name": "Amazon Cognito", "role": "Authentication", "category": "auth" },
+        { "name": "AWS AppSync", "role": "GraphQL API with managed subscriptions", "category": "integration" },
+        { "name": "Amazon ECS Fargate", "role": "Domain services and mutation resolvers", "category": "compute" },
+        { "name": "Amazon RDS PostgreSQL", "role": "Primary database", "category": "database" },
+        { "name": "Amazon S3", "role": "User uploads", "category": "storage" }
+      ],
+      "rationale": "AppSync subscriptions handle connection management, fan-out, and auth integration with Cognito out of the box — you write GraphQL resolvers, not socket code.",
+      "tradeoffs": {
+        "pros": [
+          "Real-time connection management fully offloaded",
+          "Cognito integration is first-class",
+          "GraphQL schema gives clients a typed contract"
+        ],
+        "cons": [
+          "GraphQL learning curve if the team is REST-native",
+          "AppSync pricing grows with subscription minutes",
+          "Adds a second API surface to maintain"
+        ],
+        "best_when": "You want managed real-time and are open to GraphQL."
+      },
+      "estimated_monthly_cost_usd": {
+        "total_low": 320,
+        "total_high": 590,
+        "breakdown": [
+          { "category": "compute", "low": 110, "high": 190, "notes": "Fargate tasks" },
+          { "category": "database", "low": 95, "high": 160, "notes": "RDS Multi-AZ" },
+          { "category": "integration", "low": 60, "high": 150, "notes": "AppSync queries + subscription minutes" },
+          { "category": "networking", "low": 20, "high": 50, "notes": "ALB + transfer" },
+          { "category": "storage", "low": 5, "high": 15, "notes": "S3" }
+        ],
+        "assumptions": ["1,500 concurrent subscriptions at peak"]
+      },
+      "operational_complexity": "medium",
+      "scalability_ceiling": "Very high; AppSync subscriptions scale to millions of connections",
+      "security_posture": "Strong; Cognito-authorized subscriptions, private VPC resources",
+      "time_to_deploy": "3-4 weeks"
+    }
+  ],
+  "recommendation": {
+    "selected_option_id": "opt-container-rt",
+    "rationale": "With real-time now in v1, the container option extends most naturally: the ALB already terminates WebSockets, and Redis Pub/Sub is the simplest correct way to fan out messages across Fargate tasks. You keep PostgreSQL for the relational core, add no new service categories, and can ship CRUD first and sockets second. AppSync is excellent but forces a GraphQL migration your team didn't ask for; serverless WebSocket remains cheapest but inherits the DynamoDB modeling risk flagged in v1.",
+    "why_not_others": [
+      {
+        "option_id": "opt-serverless-rt",
+        "reason": "Still the cheapest, but the DynamoDB modeling risk for relational project/task data remains, and WebSocket-on-Lambda debugging is materially harder for a small team."
+      },
+      {
+        "option_id": "opt-managed-rt",
+        "reason": "AppSync subscriptions are the most scalable path, but introducing GraphQL now adds a learning curve and a second API surface before product-market fit is proven."
+      }
+    ]
+  }
+}

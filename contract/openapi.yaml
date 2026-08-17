@@ -1,0 +1,697 @@
+openapi: 3.1.0
+info:
+  title: AI Cloud Architect API
+  version: 0.1.0
+  description: |
+    Contract between the AI Cloud Architect frontend and backend.
+
+    Flow: generate -> select -> (chat | refine)* -> export
+
+    Phase 1 backend is a fixture-serving stub; the real LLM implementation
+    replaces internals without changing this contract.
+servers:
+  - url: http://localhost:8000
+    description: Local stub backend
+
+paths:
+  /api/health:
+    get:
+      operationId: healthCheck
+      summary: Liveness probe
+      responses:
+        "200":
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /api/architect/examples:
+    get:
+      operationId: getExamples
+      summary: Pre-loaded example prompts for onboarding
+      responses:
+        "200":
+          description: List of example prompts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExamplePrompt"
+
+  /api/architect/generate:
+    post:
+      operationId: generateArchitectures
+      summary: Analyze requirements and generate 3 architecture options
+      description: |
+        Creates a new session. Extracts constraints from the requirements,
+        generates exactly 3 architecture options, and returns a recommendation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequirementsInput"
+      responses:
+        "200":
+          description: Generated architectures
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerateResponse"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "502":
+          $ref: "#/components/responses/LLMError"
+
+  /api/architect/session/{session_id}:
+    get:
+      operationId: getSession
+      summary: Fetch full session state
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Session state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/architect/select:
+    post:
+      operationId: selectArchitecture
+      summary: User selects one architecture option
+      description: Generates the Mermaid diagram and full analysis for the chosen option.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SelectRequest"
+      responses:
+        "200":
+          description: Selected architecture with diagram and analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SelectResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/architect/chat:
+    post:
+      operationId: chatWithArchitect
+      summary: Ask the AI architect a question about the current architecture
+      description: |
+        Conversational endpoint. The reply may include proposed changes to the
+        architecture. If the user accepts proposed changes, call /refine or
+        /chat/apply (Phase 2). Phase 1: reply + proposed changes only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatRequest"
+      responses:
+        "200":
+          description: Assistant reply, optionally with proposed changes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/architect/refine:
+    post:
+      operationId: refineArchitectures
+      summary: Modify requirements and regenerate architectures
+      description: |
+        Re-runs the generate pipeline against updated requirements within an
+        existing session. Bumps the session version.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefineRequest"
+      responses:
+        "200":
+          description: Regenerated architectures
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerateResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/architect/export:
+    post:
+      operationId: exportArchitecture
+      summary: Export the finalized architecture
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportRequest"
+      responses:
+        "200":
+          description: Exported content
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+components:
+  responses:
+    ValidationError:
+      description: Request failed validation
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    NotFound:
+      description: Session or resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    LLMError:
+      description: LLM generation failed after retries
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, version, mode]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        version:
+          type: string
+          example: "0.1.0"
+        mode:
+          type: string
+          enum: [stub, live]
+          description: stub = fixture responses, live = real LLM
+
+    ApiError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              example: session_not_found
+            message:
+              type: string
+              example: "No session with id 'abc123'"
+            details:
+              nullable: true
+
+    ExamplePrompt:
+      type: object
+      required: [id, title, description]
+      properties:
+        id:
+          type: string
+          example: saas-eu-gdpr
+        title:
+          type: string
+          example: "B2B SaaS with GDPR"
+        description:
+          type: string
+          example: "Project management SaaS for 5,000 EU users, must be GDPR compliant, budget under $500/month"
+
+    RequirementsInput:
+      type: object
+      required: [description]
+      properties:
+        description:
+          type: string
+          minLength: 20
+          maxLength: 5000
+          description: Free-text project requirements
+          example: "I'm building a project management SaaS for small teams. Expect ~5,000 users in the EU in the first year. Must be GDPR compliant. Budget under $500/month. Needs real-time notifications eventually."
+        app_type:
+          type: string
+          enum: [web_app, api_backend, mobile_backend, data_pipeline, iot, ml_workload, other]
+          nullable: true
+        expected_users:
+          type: string
+          enum: [under_1k, "1k_10k", "10k_100k", "100k_1m", over_1m]
+          nullable: true
+        data_sensitivity:
+          type: string
+          enum: [none, pii, financial, health]
+          nullable: true
+        budget_tier:
+          type: string
+          enum: [lean, standard, growth, scale]
+          nullable: true
+          description: "lean < $50/mo, standard $50-500/mo, growth $500-5k/mo, scale > $5k/mo"
+        compliance:
+          type: array
+          items:
+            type: string
+            enum: [gdpr, hipaa, pci_dss, soc2]
+          nullable: true
+        region_preference:
+          type: string
+          nullable: true
+          example: eu-central-1
+
+    Constraints:
+      type: object
+      required: [traffic_profile, data_type, latency_sensitivity, compliance, budget_tier, region, extracted_facts, ambiguities]
+      properties:
+        traffic_profile:
+          type: string
+          enum: [low, medium, high, very_high]
+        data_type:
+          type: string
+          enum: [relational, document, blob, stream, mixed]
+        latency_sensitivity:
+          type: string
+          enum: [relaxed, standard, real_time]
+        compliance:
+          type: array
+          items:
+            type: string
+        budget_tier:
+          type: string
+          enum: [lean, standard, growth, scale]
+        region:
+          type: string
+          example: eu-central-1
+        extracted_facts:
+          type: array
+          items:
+            type: string
+          description: Facts the AI extracted from the requirements text
+        ambiguities:
+          type: array
+          items:
+            type: string
+          description: Things the AI assumed or found unclear
+
+    ServiceSpec:
+      type: object
+      required: [name, role, category]
+      properties:
+        name:
+          type: string
+          example: "AWS Lambda"
+        role:
+          type: string
+          example: "Runs API business logic, scales to zero"
+        category:
+          type: string
+          enum: [compute, storage, database, networking, security, monitoring, integration, cdn, auth, other]
+
+    CostLineItem:
+      type: object
+      required: [category, low, high]
+      properties:
+        category:
+          type: string
+          example: compute
+        low:
+          type: number
+          example: 45.0
+        high:
+          type: number
+          example: 120.0
+        notes:
+          type: string
+          nullable: true
+
+    CostEstimate:
+      type: object
+      required: [total_low, total_high, breakdown, assumptions]
+      properties:
+        total_low:
+          type: number
+          example: 180.0
+        total_high:
+          type: number
+          example: 420.0
+        breakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/CostLineItem"
+        assumptions:
+          type: array
+          items:
+            type: string
+
+    Tradeoffs:
+      type: object
+      required: [pros, cons, best_when]
+      properties:
+        pros:
+          type: array
+          items:
+            type: string
+        cons:
+          type: array
+          items:
+            type: string
+        best_when:
+          type: string
+
+    ArchitectureOption:
+      type: object
+      required:
+        - id
+        - name
+        - paradigm
+        - summary
+        - services
+        - rationale
+        - tradeoffs
+        - estimated_monthly_cost_usd
+        - operational_complexity
+        - scalability_ceiling
+        - security_posture
+        - time_to_deploy
+      properties:
+        id:
+          type: string
+          example: opt-serverless
+        name:
+          type: string
+          example: "Serverless-First"
+        paradigm:
+          type: string
+          enum: [serverless, container, traditional, hybrid]
+        summary:
+          type: string
+        services:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServiceSpec"
+        rationale:
+          type: string
+        tradeoffs:
+          $ref: "#/components/schemas/Tradeoffs"
+        estimated_monthly_cost_usd:
+          $ref: "#/components/schemas/CostEstimate"
+        operational_complexity:
+          type: string
+          enum: [low, medium, high]
+        scalability_ceiling:
+          type: string
+          example: "Effectively unlimited (Lambda concurrency limits aside)"
+        security_posture:
+          type: string
+        time_to_deploy:
+          type: string
+          example: "1-2 weeks"
+
+    Recommendation:
+      type: object
+      required: [selected_option_id, rationale, why_not_others]
+      properties:
+        selected_option_id:
+          type: string
+        rationale:
+          type: string
+        why_not_others:
+          type: array
+          items:
+            type: object
+            required: [option_id, reason]
+            properties:
+              option_id:
+                type: string
+              reason:
+                type: string
+
+    GenerateResponse:
+      type: object
+      required: [session_id, version, constraints, options, recommendation]
+      properties:
+        session_id:
+          type: string
+        version:
+          type: integer
+          description: Session version; bumped on each refine
+          example: 1
+        constraints:
+          $ref: "#/components/schemas/Constraints"
+        options:
+          type: array
+          minItems: 3
+          maxItems: 3
+          items:
+            $ref: "#/components/schemas/ArchitectureOption"
+        recommendation:
+          $ref: "#/components/schemas/Recommendation"
+
+    SelectRequest:
+      type: object
+      required: [session_id, option_id]
+      properties:
+        session_id:
+          type: string
+        option_id:
+          type: string
+
+    SecurityRisk:
+      type: object
+      required: [severity, description, mitigation]
+      properties:
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        description:
+          type: string
+        mitigation:
+          type: string
+
+    SecurityAnalysis:
+      type: object
+      required: [posture, risks, compliance_notes]
+      properties:
+        posture:
+          type: string
+        risks:
+          type: array
+          items:
+            $ref: "#/components/schemas/SecurityRisk"
+        compliance_notes:
+          type: array
+          items:
+            type: string
+
+    ScalabilityAnalysis:
+      type: object
+      required: [bottlenecks, strategy, mechanisms, ceiling]
+      properties:
+        bottlenecks:
+          type: array
+          items:
+            type: string
+        strategy:
+          type: string
+        mechanisms:
+          type: array
+          items:
+            type: string
+        ceiling:
+          type: string
+
+    Analysis:
+      type: object
+      required: [cost, security, scalability]
+      properties:
+        cost:
+          type: object
+          required: [monthly_estimate_usd, notes]
+          properties:
+            monthly_estimate_usd:
+              $ref: "#/components/schemas/CostEstimate"
+            notes:
+              type: array
+              items:
+                type: string
+        security:
+          $ref: "#/components/schemas/SecurityAnalysis"
+        scalability:
+          $ref: "#/components/schemas/ScalabilityAnalysis"
+
+    Diagram:
+      type: object
+      required: [title, mermaid_source]
+      properties:
+        title:
+          type: string
+        mermaid_source:
+          type: string
+          description: Valid Mermaid flowchart/graph source
+
+    SelectResponse:
+      type: object
+      required: [session_id, selected_option_id, diagram, analysis]
+      properties:
+        session_id:
+          type: string
+        selected_option_id:
+          type: string
+        diagram:
+          $ref: "#/components/schemas/Diagram"
+        analysis:
+          $ref: "#/components/schemas/Analysis"
+
+    ChatRequest:
+      type: object
+      required: [session_id, message]
+      properties:
+        session_id:
+          type: string
+        message:
+          type: string
+          minLength: 1
+          maxLength: 2000
+
+    ProposedChange:
+      type: object
+      required: [id, action, description, detail]
+      properties:
+        id:
+          type: string
+        action:
+          type: string
+          enum: [add_service, remove_service, replace_service, modify_config]
+        description:
+          type: string
+          example: "Add ElastiCache Redis for session storage"
+        detail:
+          type: string
+
+    ChatResponse:
+      type: object
+      required: [reply, proposed_changes]
+      properties:
+        reply:
+          type: string
+        proposed_changes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProposedChange"
+        updated_diagram:
+          nullable: true
+          $ref: "#/components/schemas/Diagram"
+
+    RefineRequest:
+      type: object
+      required: [session_id, requirements]
+      properties:
+        session_id:
+          type: string
+        requirements:
+          $ref: "#/components/schemas/RequirementsInput"
+
+    ExportRequest:
+      type: object
+      required: [session_id, format]
+      properties:
+        session_id:
+          type: string
+        format:
+          type: string
+          enum: [markdown, mermaid, json]
+
+    ExportResponse:
+      type: object
+      required: [format, filename, content_type, content]
+      properties:
+        format:
+          type: string
+          enum: [markdown, mermaid, json]
+        filename:
+          type: string
+          example: architecture.md
+        content_type:
+          type: string
+          example: text/markdown
+        content:
+          type: string
+          description: File content as a string (all Phase 1 formats are text)
+
+    ChatMessage:
+      type: object
+      required: [role, content, timestamp]
+      properties:
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    Session:
+      type: object
+      required: [id, version, created_at, requirements]
+      properties:
+        id:
+          type: string
+        version:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        requirements:
+          $ref: "#/components/schemas/RequirementsInput"
+        constraints:
+          nullable: true
+          $ref: "#/components/schemas/Constraints"
+        options:
+          type: array
+          items:
+            $ref: "#/components/schemas/ArchitectureOption"
+        recommendation:
+          nullable: true
+          $ref: "#/components/schemas/Recommendation"
+        selected_option_id:
+          type: string
+          nullable: true
+        diagram:
+          nullable: true
+          $ref: "#/components/schemas/Diagram"
+        analysis:
+          nullable: true
+          $ref: "#/components/schemas/Analysis"
+        chat_history:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatMessage"

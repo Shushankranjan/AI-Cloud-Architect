@@ -1,0 +1,22 @@
+[
+  {
+    "id": "saas-eu-gdpr",
+    "title": "B2B SaaS with GDPR",
+    "description": "I'm building a project management SaaS for small teams. Expect ~5,000 users in the EU in the first year. Must be GDPR compliant. Budget under $500/month. Will need real-time notifications eventually."
+  },
+  {
+    "id": "api-startup",
+    "title": "Public REST API",
+    "description": "We're launching a public REST API for currency conversion. Expect 10k-50k requests/day initially, growing 10x in a year. Latency must stay under 100ms. No user accounts, no sensitive data. Keep costs lean."
+  },
+  {
+    "id": "ecommerce-flash",
+    "title": "E-commerce with traffic spikes",
+    "description": "Headless e-commerce storefront for a fashion brand. Normal traffic is modest but we do flash sales with 50x spikes. Handles payments via Stripe. Needs to survive Black Friday. Budget around $1k/month."
+  },
+  {
+    "id": "health-app",
+    "title": "Health tracking app (HIPAA)",
+    "description": "Mobile app where patients log symptoms and share reports with their doctors. US market, HIPAA required. Expect 20k users year one. Data is highly sensitive and must be auditable."
+  }
+]
