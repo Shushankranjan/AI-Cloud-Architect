@@ -13,7 +13,7 @@ import { PARADIGM_LABELS } from "@/lib/format";
 import { AnalysisTabs } from "./AnalysisTabs";
 import { ChatPanel } from "./ChatPanel";
 import { MermaidDiagram } from "./MermaidDiagram";
-import { Badge, Button, Card, SectionTitle } from "./ui";
+import { Badge, Button, Card, Icon, SectionTitle } from "./ui";
 
 export function WorkspaceScreen({
   generated,
@@ -55,6 +55,7 @@ export function WorkspaceScreen({
         </div>
         <div className="flex items-center gap-2">
           <Button variant="secondary" onClick={onRefine}>
+            <Icon name="PencilLine" />
             Modify requirements
           </Button>
           <div className="relative">
@@ -63,6 +64,7 @@ export function WorkspaceScreen({
               onClick={() => setExportOpen((v) => !v)}
               disabled={exporting}
             >
+              <Icon name="Download" />
               {exporting ? "Exporting…" : "Finalize & export"}
             </Button>
             {exportOpen && (
@@ -89,6 +91,7 @@ export function WorkspaceScreen({
             )}
           </div>
           <Button variant="ghost" onClick={onStartOver}>
+            <Icon name="RotateCcw" />
             Start over
           </Button>
         </div>

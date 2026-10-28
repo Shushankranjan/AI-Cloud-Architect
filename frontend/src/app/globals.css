@@ -46,6 +46,14 @@ body {
   animation: pulse-step 1.2s ease-in-out infinite;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse,
+  .animate-ping,
+  .animate-pulse-step {
+    animation: none !important;
+  }
+}
+
 .mermaid-container svg {
   max-width: 100%;
   height: auto;

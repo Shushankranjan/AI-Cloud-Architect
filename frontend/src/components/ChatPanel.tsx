@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChatMessage, ProposedChange } from "@/lib/types";
 import { titleCase } from "@/lib/format";
-import { Badge, Spinner, cx } from "./ui";
+import { Badge, Icon, Spinner, cx } from "./ui";
 
 const actionTone: Record<string, "emerald" | "rose" | "amber" | "sky"> = {
   add_service: "emerald",
@@ -144,8 +144,10 @@ export function ChatPanel({
           <button
             type="submit"
             disabled={busy || !draft.trim()}
-            className="rounded-lg bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950 transition-colors hover:bg-sky-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+            aria-label="Send message"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950 transition-colors hover:bg-sky-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
           >
+            <Icon name="Send" />
             Send
           </button>
         </div>

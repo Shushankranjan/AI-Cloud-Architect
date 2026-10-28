@@ -10,10 +10,11 @@ services:
         required: false
     environment:
       ARCHITECT_MODE: ${ARCHITECT_MODE:-stub}
-      ARCHITECT_LLM_PROVIDER: ${ARCHITECT_LLM_PROVIDER:-gemini}
-      ARCHITECT_LARGE_MODEL: ${ARCHITECT_LARGE_MODEL:-gemini-flash-latest}
+      ARCHITECT_LLM_PROVIDER: ${ARCHITECT_LLM_PROVIDER:-openrouter}
+      ARCHITECT_LARGE_MODEL: ${ARCHITECT_LARGE_MODEL:-google/gemini-2.5-flash}
       ARCHITECT_LLM_TIMEOUT: ${ARCHITECT_LLM_TIMEOUT:-120}
       ARCHITECT_LLM_MAX_RETRIES: ${ARCHITECT_LLM_MAX_RETRIES:-2}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]

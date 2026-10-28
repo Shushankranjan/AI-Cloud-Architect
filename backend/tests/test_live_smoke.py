@@ -1,11 +1,11 @@
 """End-to-end smoke test against the real LLM provider.
 
-Opt-in: requires ARCHITECT_LIVE_TESTS=1 (GEMINI_API_KEY + ARCHITECT_MODE=live
+Opt-in: requires ARCHITECT_LIVE_TESTS=1 (the provider's API key + ARCHITECT_MODE=live
 come from the environment or the .env file loaded by the app). Run with:
 
     ARCHITECT_LIVE_TESTS=1 .venv/bin/python -m pytest backend/tests/test_live_smoke.py -v -s
 
-Note: consumes real API quota (free tier allows ~20 requests/day per model).
+Note: consumes real API quota. Pick a cheap/free model via ARCHITECT_LARGE_MODEL.
 """
 from __future__ import annotations
 

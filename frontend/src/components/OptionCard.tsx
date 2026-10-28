@@ -8,7 +8,7 @@ import {
   SERVICE_CATEGORY_LABELS,
   costRange,
 } from "@/lib/format";
-import { Badge, Button, Card, cx } from "./ui";
+import { Badge, Button, Card, Icon, cx } from "./ui";
 
 const paradigmTone: Record<string, "sky" | "emerald" | "amber" | "violet"> = {
   serverless: "sky",
@@ -129,9 +129,14 @@ export function OptionCard({
             variant={recommended ? "primary" : "secondary"}
             className="flex-1"
           >
+            <Icon name="Check" />
             {busy ? "Loading…" : recommended ? "Use recommended" : "Select this"}
           </Button>
           <Button variant="ghost" onClick={() => setExpanded((v) => !v)}>
+            <Icon
+              name="ChevronDown"
+              className={cx("transition-transform", expanded && "rotate-180")}
+            />
             {expanded ? "Less" : "Details"}
           </Button>
         </div>

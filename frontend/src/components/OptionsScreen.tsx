@@ -5,7 +5,7 @@ import type { GenerateResponse } from "@/lib/types";
 import { COMPLEXITY_LABELS, PARADIGM_LABELS, costRange } from "@/lib/format";
 import { ConstraintsPanel } from "./ConstraintsPanel";
 import { OptionCard } from "./OptionCard";
-import { Button, Card, SectionTitle, cx } from "./ui";
+import { Button, Card, Icon, SectionTitle, cx } from "./ui";
 
 export function OptionsScreen({
   generated,
@@ -35,9 +35,11 @@ export function OptionsScreen({
         </div>
         <div className="flex gap-2">
           <Button variant="ghost" onClick={() => setShowTable((v) => !v)}>
+            <Icon name="Columns2" />
             {showTable ? "Hide comparison" : "Compare side-by-side"}
           </Button>
           <Button variant="secondary" onClick={onRefine}>
+            <Icon name="PencilLine" />
             Modify requirements
           </Button>
         </div>

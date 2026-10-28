@@ -17,7 +17,7 @@ import {
   DATA_SENSITIVITY_LABELS,
   EXPECTED_USERS_LABELS,
 } from "@/lib/format";
-import { Button, Card, SectionTitle, cx } from "./ui";
+import { Button, Card, Icon, SectionTitle, cx } from "./ui";
 
 const selectClass =
   "w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-500";
@@ -207,6 +207,7 @@ Example: I'm building a project management SaaS for small teams. Expect ~5,000 u
             The AI extracts constraints, then drafts 3 architectures.
           </p>
           <Button onClick={handleSubmit} disabled={busy} className="px-6 py-2.5">
+            <Icon name="Sparkles" />
             {busy ? "Working…" : submitLabel}
           </Button>
         </div>

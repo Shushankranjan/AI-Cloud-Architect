@@ -1,7 +1,58 @@
 import type { ReactNode } from "react";
+import {
+  Check,
+  ChevronDown,
+  Columns2,
+  Download,
+  PencilLine,
+  RotateCcw,
+  Send,
+  Sparkles,
+  type IconNode,
+} from "lucide";
 
 export function cx(...parts: (string | false | null | undefined)[]) {
   return parts.filter(Boolean).join(" ");
+}
+
+const ICONS = {
+  Sparkles,
+  Columns2,
+  PencilLine,
+  Download,
+  RotateCcw,
+  Check,
+  ChevronDown,
+  Send,
+} as const satisfies Record<string, IconNode>;
+
+export type IconName = keyof typeof ICONS;
+
+export function Icon({
+  name,
+  className,
+}: {
+  name: IconName;
+  className?: string;
+}) {
+  const nodes = ICONS[name];
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      className={cx("h-4 w-4 shrink-0", className)}
+    >
+      {nodes.map(([tag, attrs], i) => {
+        const Tag = tag as keyof React.JSX.IntrinsicElements;
+        return <Tag key={i} {...attrs} />;
+      })}
+    </svg>
+  );
 }
 
 export function Card({
